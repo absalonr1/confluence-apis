@@ -1,0 +1,73 @@
+@startuml
+
+actor user
+participant front
+'participant serv1 as "POD \nMasive Emis."
+participant serv2 as "POD \nWebsocket"
+participant serv3 as "POD \nBackend"
+participant serv4 as "bx-super-\napp-emissions"
+database mongo
+participant rabbit
+participant google
+participant redis
+queue topic1 as  "pyme2c-emission-create"
+
+autonumber "[00]"
+
+== Con websocket ==
+
+front->s3: son SDK de AWS para S3
+
+
+lambda->s3:
+activate lambda
+group procesamiento
+    loop por cada fila
+        lambda->google: 
+        lambda->redis:
+        lambda->tarif: tarifica direcciones OK
+        lambda->mongo: actualiza "quotation"
+        |||
+    end
+    lambda->serv2: notifca resultado
+    activate serv2
+    serv2->front: notifica via websocket
+    deactivate serv2
+    front->mongo: rescata y despliega info. de quotation
+    
+    deactivate lambda
+    |||
+end
+
+user->front: edita registros \nde quotation
+front->serv3: actualiza en mongo \nquotation ( N registros editados)
+alt muchos registros
+    serv3->lambda: (ASYNC)  recalcular
+    note over lambda: mismo proceso que cuando se sube el excel
+
+else pocos registros
+    loop por cada fila que se editó
+        ' activate serv3
+        serv3->google: valida nuevamente (unitario)
+        serv3->tarif: tarifica (unitario)
+        serv3->mongo: actualiza en mongo \nquotation
+        ' deactivate serv3
+    end
+end
+
+
+
+
+note over front , tarif: proceso de PAGO
+
+serv4<-rabbit: Pago realizado
+activate serv4
+loop por cada fila del quotation
+    serv4->topic1: msg con payload para emitir
+    note over redis , topic2: proceso existente de creacion de os (con retry)
+    |||
+end
+
+deactivate serv4
+
+@enduml

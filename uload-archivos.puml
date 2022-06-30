@@ -1,0 +1,54 @@
+@startuml
+
+participant front
+participant serv1 as "Masive Emis."
+database mongo
+participant google
+participant redis
+
+autonumber "[00]"
+
+front->serv1:
+
+activate serv1
+
+loop por cada file
+    serv1->google:
+    |||
+end
+
+serv1-->front
+
+deactivate serv1
+
+== Sin websocket , usando mongo ==
+
+front->serv1:
+
+activate serv1
+serv1->s3:
+serv1->mongo: "bitacora"
+serv1-->front:
+deactivate serv1
+
+loop cada x seg
+    front -> mongo: resultado del procesamiento
+    |||
+end
+
+lambda->s3:
+activate lambda
+group procesamiento
+    loop por cada fila
+        lambda->google: 
+        lambda->redis:
+        |||
+    end
+    lambda->mongo: actualiza estado bitacora
+    deactivate lambda
+    |||
+end
+
+
+
+@enduml
